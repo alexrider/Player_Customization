@@ -24,16 +24,16 @@ for k, v in pairs(craft_ingreds) do
 	})
 	minetest.register_tool("clothing:shirt_"..k, {
 		description = k.." shirt",
-		inventory_image = "clothing_inv_shirt_"..k.."_overlay.png^clothing_shirt_inv_white.png",
-		texture = "clothing_shirt_"..k.."_overlay.png^clothing_shirt_white.png",
+		inventory_image = "clothing_inv_shirt_"..k.."_overlay.png ^ clothing_shirt_inv_white.png",
+		texture = "clothing_shirt_"..k.."_overlay.png  ^  clothing_shirt_white.png",
 		groups = {armor_torso=1, armor_heal=5, armor_use=2000},
 		wear = 0,
 	})
 
 	minetest.register_tool("clothing:pants_"..k, {
 		description = k.." pants",
-		inventory_image = "clothing_inv_pants_"..k.."_overlay.png^clothing_pants_inv_white.png",
-		texture = "clothing_pants_"..k.."_overlay.png^clothing_pants_white.png",
+		inventory_image = "clothing_inv_pants_"..k.."_overlay.png ^ clothing_pants_inv_white.png",
+		texture = "clothing_pants_"..k.."_overlay.png  ^  clothing_pants_white.png",
 		groups = {armor_legs=1, armor_heal=5, armor_use=2000},
 		wear = 0,
 	})
