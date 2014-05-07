@@ -1,25 +1,37 @@
-local time = 0
-local update_time = tonumber(minetest.setting_get("3d_clothing_update_time"))
-if not update_time then
-	update_time = 1
-	minetest.setting_set("3d_clothing_update_time", tostring(update_time))
-end
+CLOTHING_INIT_DELAY = 1
+CLOTHING_INIT_TIMES = 1
+MULTISKIN_DEFAULT_SKIN = "captain_hindsight.png"
 
 clothing = {
-	player_hp = {},
-	elements = {"head", "torso", "legs", "feet"},
-	formspec = "size[8,8.5]button[0,0;2,0.5;main;Back]"
-		.."list[current_player;main;0,4.5;8,4;]"
-		.."list[detached:player_name_clothing;clothing_head;3,0;1,1;]"
-		.."list[detached:player_name_clothing;clothing_torso;3,1;1,1;]"
-		.."list[detached:player_name_clothing;clothing_legs;3,2;1,1;]"
-		.."list[detached:player_name_clothing;clothing_feet;3,3;1,1;]",
+	formspec = "size[8,8.5]list[detached:player_name_clothing;clothing;0,1;2,3;]"
+		.."image[2,0.75;2,4;clothing_preview]"
+    	.."list[current_player;main;0,4.5;8,4;]"
+    	.."list[current_player;craft;4,1;3,3;]"
+    	.."list[current_player;craftpreview;7,2;1,1;]",
+	textures = {},
 }
 
-clothing.def = {
-	state = 0,
-	count = 0
-}
+if inventory_plus then
+	clothing.formspec = "size[8,8.5]button[0,0;2,0.5;main;Back]"
+		.."list[detached:player_name_clothing;clothing;0,1;2,3;]"
+		.."image[2.5,0.75;2,4;clothing_preview]"
+		.."list[current_player;main;0,4.5;8,4;]"
+elseif unified_inventory then
+	unified_inventory.register_button("clothing", {
+		type = "image",
+		image = "inventory_plus_clothing.png",
+	})
+	unified_inventory.register_page("clothing", {
+		get_formspec = function(player)
+			local name = player:get_player_name()
+			local formspec = "background[0.06,0.99;7.92,7.52;clothing_ui_form.png]"
+				.."label[0,0;Clothing]"
+				.."list[detached:"..name.."_clothing;clothing;0,1;2,3;]"
+				.."image[2.5,0.75;2,4;"..clothing.textures[name].preview.."]"
+			return {formspec=formspec}
+		end,
+	})
+end
 
 clothing.set_player_clothing = function(self, player)
 	if not player then
@@ -27,154 +39,123 @@ clothing.set_player_clothing = function(self, player)
 	end
 	local name = player:get_player_name()
 	local player_inv = player:get_inventory()
-	local clothing_texture = uniskins.default_texture
-	local clothing_level = 0
-	local state = 0
-	local items = 0
+	if not name or not player_inv then
+		return
+	end
+	local clothing_texture = "clothing_trans.png"
+	local elements = {}
 	local textures = {}
-	for _,v in ipairs(self.elements) do
-		local stack = player_inv:get_stack("clothing_"..v, 1)
-		local level = stack:get_definition().groups["clothing_"..v]
-		if level then
-			local item = stack:get_name()
-			table.insert(textures, item:gsub("%:", "_")..".png")
-			clothing_level = clothing_level + level
-			state = state + stack:get_wear()
-			items = items+1
-		end			
-	end
-	if table.getn(textures) > 0 then
-		clothing_texture = table.concat(textures, "^")
-	end
-	local clothing_groups = {fleshy=100}
-	if clothing_level > 0 then
-		clothing_groups.level = math.floor(clothing_level / 20)
-		clothing_groups.fleshy = 100 - clothing_level
-	end
---	player:set_clothing_groups(clothing_groups)
-	uniskins.clothing[name] = clothing_texture
-	uniskins:update_player_visuals(player)
-	clothing.def[name].state = state
-	clothing.def[name].count = items
-end
-
-clothing.update_clothing = function(self, player)
-	if not player then
-		return
-	end
-	local name = player:get_player_name()
-	local hp = player:get_hp() or 0
-	if hp == 0 or hp == self.player_hp[name] then
-		return
-	end
-	if self.player_hp[name] > hp then
-		local player_inv = player:get_inventory()
-		local clothing_inv = minetest.get_inventory({type="detached", name=name.."_clothing"})
-		if not clothing_inv then
-			return
-		end
-		local heal_max = 0
-		local state = 0
-		local items = 0
-		for _,v in ipairs(self.elements) do
-			local stack = clothing_inv:get_stack("clothing_"..v, 1)
-			if stack:get_count() > 0 then
-				local use = stack:get_definition().groups["clothing_use"] or 0
-				local heal = stack:get_definition().groups["clothing_heal"] or 0
-				local item = stack:get_name()
-				stack:add_wear(use)
-				clothing_inv:set_stack("clothing_"..v, 1, stack)
-				player_inv:set_stack("clothing_"..v, 1, stack)
-				state = state + stack:get_wear()
-				items = items+1
-				if stack:get_count() == 0 then
-					local desc = minetest.registered_items[item].description
-					if desc then
-						minetest.chat_send_player(name, "Your "..desc.." got destroyed!")
-					end				
-					self:set_player_clothing(player)
+	local preview = multiskin:get_skin_name(name) or "clothing_preview"
+	preview = preview..".png"
+	for i=1, 6 do
+		local stack = player_inv:get_stack("clothing", i)
+		local item = stack:get_name()
+		if stack:get_count() == 1 then
+			local def = stack:get_definition()
+			if def.groups["clothing"] == 1 then
+				local texture = item:gsub("%:", "_")
+				table.insert(textures, texture..".png")
+				if not def.groups["no_preview"] then
+					preview = preview.."^"..texture.."_preview.png"
 				end
-				heal_max = heal_max + heal
 			end
 		end
-		clothing.def[name].state = state
-		clothing.def[name].count = items
-		if heal_max > math.random(100) then
-			player:set_hp(self.player_hp[name])
-			return
-		end		
 	end
-	self.player_hp[name] = hp
+	if #textures > 0 then
+		clothing_texture = table.concat(textures, "^")
+	end
+	self.textures[name].clothing = clothing_texture
+	self.textures[name].preview = preview
+	multiskin[name].clothing = clothing_texture
+	multiskin:update_player_visuals(player)
 end
 
--- Register Callbacks
+clothing.get_clothing_formspec = function(self, name)
+	local formspec = clothing.formspec:gsub("player_name", name)
+	return formspec:gsub("clothing_preview", clothing.textures[name].preview)
+end
+
+clothing.update_inventory = function(self, player)
+	local name = player:get_player_name()
+	if unified_inventory then
+		if unified_inventory.current_page[name] == "clothing" then
+			unified_inventory.set_inventory_formspec(player, "clothing")
+		end
+	else
+		local formspec = clothing:get_clothing_formspec(name)
+		if inventory_plus then
+			local page = player:get_inventory_formspec()
+			if page:find("detached:"..name.."_clothing") then
+				inventory_plus.set_inventory_formspec(player, formspec)
+			end
+		else
+			player:set_inventory_formspec(formspec)
+		end
+	end
+end
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
 	local name = player:get_player_name()
-	if fields.clothing then
-		local formspec = clothing.formspec:gsub("player_name", name)
+	if inventory_plus and fields.clothing then
+		local formspec = clothing:get_clothing_formspec(name)
 		inventory_plus.set_inventory_formspec(player, formspec)
 		return
-	end
-	for field, _ in pairs(fields) do
-		if string.sub(field,0,string.len("skins_set_")) == "skins_set_" then
-			minetest.after(0, function(player)
-				uniskins.skin[name] = skins.skins[name]..".png"
-				uniskins:update_player_visuals(player)
-			end, player)
-		end
 	end
 end)
 
 minetest.register_on_joinplayer(function(player)
-	inventory_plus.register_button(player,"clothing", "clothing")
-	local player_inv = player:get_inventory()
+	multiskin:init(player)
 	local name = player:get_player_name()
+	local player_inv = player:get_inventory()
 	local clothing_inv = minetest.create_detached_inventory(name.."_clothing",{
 		on_put = function(inv, listname, index, stack, player)
 			player:get_inventory():set_stack(listname, index, stack)
 			clothing:set_player_clothing(player)
+			clothing:update_inventory(player)
 		end,
 		on_take = function(inv, listname, index, stack, player)
 			player:get_inventory():set_stack(listname, index, nil)
 			clothing:set_player_clothing(player)
+			clothing:update_inventory(player)
+		end,
+		on_move = function(inv, from_list, from_index, to_list, to_index, count, player)
+			local plaver_inv = player:get_inventory()
+			local stack = inv:get_stack(to_list, to_index)
+			player_inv:set_stack(to_list, to_index, stack)
+			player_inv:set_stack(from_list, from_index, nil)
+			clothing:set_player_clothing(player)
+			clothing:update_inventory(player)
 		end,
 		allow_put = function(inv, listname, index, stack, player)
-			if inv:is_empty(listname) then
-				return 1
-			end
-			return 0
+			return 1
 		end,
 		allow_take = function(inv, listname, index, stack, player)
 			return stack:get_count()
 		end,
 		allow_move = function(inv, from_list, from_index, to_list, to_index, count, player)
-			return 0
+			return count
 		end,
 	})
-	for _,v in ipairs(clothing.elements) do
-		local list = "clothing_"..v
-		player_inv:set_size(list, 1)
-		clothing_inv:set_size(list, 1)
-		clothing_inv:set_stack(list, 1, player_inv:get_stack(list, 1))
+	if inventory_plus then
+		inventory_plus.register_button(player,"clothing", "Clothing")
 	end
-	clothing.player_hp[name] = 0	
-	clothing.def[name] = {
-	state = 0,
-	count = 0
+	clothing_inv:set_size("clothing", 6)
+	player_inv:set_size("clothing", 6)
+	for i=1, 6 do
+		local stack = player_inv:get_stack("clothing", i)
+		clothing_inv:set_stack("clothing", i, stack)
+	end	
+	clothing.textures[name] = {
+		clthing = "clothing_trans.png",
+		preview = "clothing_preview.png",
 	}
-	minetest.after(0, function(player)
-		clothing:set_player_clothing(player)
-	end, player)	
-end)
-
-minetest.register_globalstep(function(dtime)
-	time = time + dtime
-	if time > update_time then
-		for _,player in ipairs(minetest.get_connected_players()) do
-			clothing:update_clothing(player)
-		end
-		time = 0
+	for i=1, CLOTHING_INIT_TIMES do
+		minetest.after(CLOTHING_INIT_DELAY * i, function(player)
+			clothing:set_player_clothing(player)
+			if inventory_plus == nil and unified_inventory == nil then
+				clothing:update_inventory(player)
+			end
+		end, player)
 	end
 end)
 
